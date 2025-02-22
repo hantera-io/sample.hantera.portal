@@ -1,0 +1,138 @@
+<html>
+<head>
+<title>Hantera Portal Host Sample</title>
+
+<style>
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+
+  header {
+    margin: auto;
+    max-width: 800px;
+  }
+
+  #app-frame {
+    margin: auto;
+    max-width: 500px;
+    height: 600px;
+
+    display: grid;
+    border: 1px solid #eee;
+    border-radius: 10px;
+    padding: 5px;
+  }
+
+  #app-frame iframe {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+</head>
+<body>
+
+  <header>
+    <h1>Hantera Portal Host Sample</h1>
+    <p>
+      This is a minimal sample of embedding Hantera Portal in another page. See the source for more information.
+    </p>
+
+    <button id="sign-in" style="display: none;">Sign in</button>
+
+    <button id="sign-out" style="display: none;">Sign out</button>
+  </header>
+
+  <div id="app-frame" style="display: none;"></div>
+
+  <script src="https://portal-cdn.hantera.io/hantera-portal-host.min.js"></script>
+  <script>
+  (async function() {
+
+    /*
+      For this sample to work, you have to register a public client with the given client ID in the script below. Make
+      sure to configure redirect URL constraints to be as specific as possible to not allow unauthorized clients to sign
+      in and capture user tokens.
+    */
+
+    /*
+     * Options
+     */
+
+    // Add you own client ID here:
+    const clientId = '00000000-0000-0000-0000-000000000013'
+
+    // Force theme. Set to undefined to use system-default:
+    const theme = 'light';
+
+    // Hostname of the Hantera tenant to use:
+    const hanteraHostname = 'demo-ecom';
+
+    // Configure the default view to load. Set to undefined to load workspace:
+    const path = '/embeds/order-search/'
+
+    /*
+     * Implementation
+     */
+
+    const sdk = await HanteraPortalSdk();
+
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.has('callback')) {
+      const code = searchParams.get('code');
+      const state = searchParams.get('state');
+
+      await sdk.handleAuthorizationResponse(code, state);
+
+      // Reload page to drop callback query params
+      window.location.href = `${window.location.protocol}//${window.location.host}${window.location.pathname}`;
+      return;
+    }
+
+    const sessions = await sdk.getSessions();
+
+    // Check if there's a session for the configured hostname already:
+    const session = sessions.find(r => r.hostname === hanteraHostname);
+
+    // If not, display sign-in button:
+    if (!session) {
+      const button = document.getElementById('sign-in');
+      button.style.display = null;
+      button.addEventListener('click', async () => {
+        window.location.href = await sdk.authorize(
+          clientId,
+          hanteraHostname,
+          `${window.location.protocol}//${window.location.host}${window.location.pathname}?callback`
+        );
+      });
+
+      return;
+    }
+
+
+    // If there is a session, display sign-out button and create host instance
+    const button = document.getElementById('sign-out');
+    button.style.display = null;
+    button.addEventListener('click', async () => {
+      sdk.signOut(session.sessionId)
+
+      // Reload page
+      window.location.href = `${window.location.protocol}//${window.location.host}${window.location.pathname}`;
+    });
+
+    const appFrame = document.getElementById('app-frame');
+    appFrame.style.display = null;
+
+    const hostInstance = await sdk.createHost({
+      hostname: hanteraHostname,
+      theme,
+      path: path || '/workspace',
+    });
+
+    hostInstance.attach(appFrame);
+
+    console.log(hostInstance);
+
+  })();
+  </script>
+</body>
+</html>
